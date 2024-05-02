@@ -10,11 +10,11 @@ public class Login {
 
         // Customer
         customer_username = "customer";
-        customer_password = "pwcustomer";
+        customer_password = "customerpw123";
 
         // Admin
         admin_username = "admin";
-        admin_password = "pwadmin";
+        admin_password = "adminpw123";
     }
 
     // Setter

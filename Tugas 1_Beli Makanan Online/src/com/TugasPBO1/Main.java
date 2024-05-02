@@ -1,16 +1,21 @@
 package com.TugasPBO1;
 
+import java.util.ArrayList;
+import java.util.List;
 import java.util.Scanner;
 
 public class Main {
-    static Scanner scanner = new Scanner(System.in);
-
     public static void main(String[] args) {
+        Scanner scanner = new Scanner(System.in);
+        Login login = new Login();
+        Admin admin = new Admin();
+        List<Restaurant> restaurants = new ArrayList<>();
+        Customer customer = new Customer(admin.getRestaurants());
+
         namaKelompok();
+        namaProject();
 
         while (true) {
-            namaProject();
-
             System.out.println("[]======= Menu ======[]");
             System.out.println("[] 1. Login Admin    []");
             System.out.println("[] 2. Login Customer []");
@@ -20,16 +25,49 @@ public class Main {
             System.out.print("> Pilihan anda: ");
 
             int choice = scanner.nextInt();
+            scanner.nextLine(); // Membersihkan karakter newline
 
             switch (choice) {
                 case 1:
-                    System.out.println("XD!");
+                    System.out.println(" ");
+                    System.out.println("----- Login Admin -----");
+                    System.out.print("> Masukkan username: ");
+                    String adminUsername = scanner.nextLine();
+                    System.out.print("> Masukkan password: ");
+                    String adminPassword = scanner.nextLine();
+
+                    if (adminUsername.equals(login.getAdmin_username()) && adminPassword.equals(login.getAdmin_password())) {
+                        System.out.println(" ");
+                        System.out.println("Berhasil!");
+                        admin.adminMenu();
+                    }
+                    else {
+                        System.out.println(" ");
+                        System.out.println("> Login gagal! Username atau password salah.");
+                        System.out.println(" ");
+                    }
                     break;
                 case 2:
-                    Customer.customerLogin(); // Memanggil metode customerLogin dari kelas Customer
+                    System.out.println(" ");
+                    System.out.println("----- Login Customer -----");
+                    System.out.print("> Masukkan username: ");
+                    String customerUsername = scanner.nextLine();
+                    System.out.print("> Masukkan password: ");
+                    String customerPassword = scanner.nextLine();
+                    if (customerUsername.equals(login.getCustomer_username()) && customerPassword.equals(login.getCustomer_password())) {
+                        System.out.println(" ");
+                        System.out.println("Berhasil!");
+                        customer.customerMenu();
+                    }
+                    else {
+                        System.out.println(" ");
+                        System.out.println("> Login gagal! Username atau password salah.");
+                        System.out.println(" ");
+                    }
                     break;
                 case 3:
                     System.out.println("Terimakasih Sudah Membuka Program Pemesanan ini!");
+                    scanner.close(); // Menutup scanner sebelum keluar
                     return;
                 default:
                     System.out.println("Pilihan Tidak ada atau salah!");
