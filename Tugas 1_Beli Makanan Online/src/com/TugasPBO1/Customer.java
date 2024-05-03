@@ -64,7 +64,7 @@ public class Customer {
             int kuantitas = scanner.nextInt();
             System.out.print("> Masukkan Jarak: ");
             double jarak = scanner.nextDouble();
-            System.out.print("> Masukkan Total Harga: ");
+            System.out.print("> Masukkan Total Harga(Rp) : Rp. ");
             double totalHarga = scanner.nextDouble();
 
             Order order = new Order(idRestaurant, idMenu, kuantitas, jarak, totalHarga);
@@ -94,6 +94,7 @@ public class Customer {
                 System.out.println("- Total Harga(RP): Rp. " + String.format("%.3f", order.getTotalHarga()));
                 System.out.println("-------------------------");
             }
+            System.out.println("Total Harga Semua Pesanan: Rp. " + String.format("%.3f", hitungTotalHargaPesanan()));
         }
     }
 
@@ -112,6 +113,15 @@ public class Customer {
             System.out.println("\nMenu:");
             restaurant.lihatMenu();
         }
+    }
+
+    // Method untuk menghitung total harga pesanan
+    public double hitungTotalHargaPesanan() {
+        double totalHargaSemuaPesanan = 0; // Inisialisasi total harga semua pesanan
+        for (Order order : pesanan) {
+            totalHargaSemuaPesanan += order.getTotalHarga(); // Menambahkan total harga pesanan ke total harga semua pesanan
+        }
+        return totalHargaSemuaPesanan;
     }
 
     public List<Restaurant> getRestaurants() {

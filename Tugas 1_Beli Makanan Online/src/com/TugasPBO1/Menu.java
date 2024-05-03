@@ -4,11 +4,13 @@ import java.util.HashMap;
 import java.util.Map;
 
 public class Menu {
+    private int idRestoran; // Menyimpan ID restoran
     private int idMenu;
     private Map<String, Double> menuMakanan;
     private Map<String, Double> menuMinuman;
 
-    public Menu(int idMenu) {
+    public Menu(int idRestoran) {
+        this.idRestoran = idRestoran; // Menginisialisasi ID restoran
         this.idMenu = idMenu;
         menuMakanan = new HashMap<>();
         menuMinuman = new HashMap<>();
@@ -32,5 +34,9 @@ public class Menu {
 
     public int getIdMenu() {
         return idMenu;
+    }
+
+    public int getIdRestoran() {
+        return idRestoran; // Mengembalikan ID restoran
     }
 }

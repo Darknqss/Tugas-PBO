@@ -49,21 +49,36 @@ public class Restaurant {
             System.out.println("Belum ada menu yang tersedia.");
         } else {
             for (Menu menu : menuList) {
-                System.out.println("ID Menu: " + menu.getIdMenu());
-                System.out.println("Makanan:");
-                for (Map.Entry<String, Double> entry : menu.getMenuMakanan().entrySet()) {
-                    String namaMenu = entry.getKey();
-                    double harga = entry.getValue();
-                    System.out.println("Nama Menu: " + namaMenu + ", Harga(Rp): Rp " + String.format("%.3f", harga));
-                }
+                System.out.println("Daftar Menu Restoran " + menu.getIdRestoran() + ":");
+                System.out.println("-------------------------"); // Garis untuk memisahkan setiap restoran
 
-                System.out.println("\nMinuman:");
-                for (Map.Entry<String, Double> entry : menu.getMenuMinuman().entrySet()) {
-                    String namaMenu = entry.getKey();
-                    double harga = entry.getValue();
-                    System.out.println("Nama Menu: " + namaMenu + ", Harga(Rp): Rp " + String.format("%.3f", harga));
+                System.out.println("Makanan:");
+                if (menu.getMenuMakanan().isEmpty()) {
+                    System.out.println("Tidak ada makanan.");
+                } else {
+                    for (Map.Entry<String, Double> entry : menu.getMenuMakanan().entrySet()) {
+                        String namaMenu = entry.getKey();
+                        double harga = entry.getValue();
+                        System.out.println("Nama Menu: " + namaMenu + ", Harga(Rp): Rp " + String.format("%.3f", harga));
+                    }
                 }
+                System.out.println("-------------------------"); // Garis untuk memisahkan makanan dan minuman
+
+                System.out.println("Minuman:");
+                if (menu.getMenuMinuman().isEmpty()) {
+                    System.out.println("Tidak ada minuman.");
+                } else {
+                    for (Map.Entry<String, Double> entry : menu.getMenuMinuman().entrySet()) {
+                        String namaMenu = entry.getKey();
+                        double harga = entry.getValue();
+                        System.out.println("Nama Menu: " + namaMenu + ", Harga(Rp): Rp " + String.format("%.3f", harga));
+                    }
+                }
+                System.out.println("-------------------------"); // Garis untuk memisahkan antar menu
             }
         }
     }
+
+
+
 }

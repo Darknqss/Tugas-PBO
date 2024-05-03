@@ -87,7 +87,7 @@ public class Main {
     // Metode untuk mencetak informasi proyek
     public static void namaProject() {
         System.out.println(" ");
-        System.out.println("----PROJECT TUGAS PBO 1: BELI MAKANAN ONLINE----");
+        System.out.println("----PROJECT TUGAS PBO 1: APLIKASI FODOL (FOOD ONLINE)----");
         System.out.println(" ");
     }
 }
