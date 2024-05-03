@@ -1,10 +1,10 @@
 # TugasPBO_FODOL (FOOD ONLINE)
 
 #### Nama Kelompok:
-- Ida Bagus Agung Wiswa Pramana
+1. Ida Bagus Agung Wiswa Pramana
 - NIM: 2305551092
 
-- I Gusti Agung Ngurah Lucien Yudistira Purnawarman 
+2. I Gusti Agung Ngurah Lucien Yudistira Purnawarman 
 - NIM: 2305551152
 
 #### Kelas: PBO kelas E
