@@ -35,7 +35,7 @@ public class Restaurant {
     }
 
     public void tambahMenu(int jenis, int idMenu, String namaMenu, double harga) {
-        Menu menu = new Menu(idMenu);
+        Menu menu = new Menu(this, idMenu); // Memberikan referensi objek Restaurant saat membuat objek Menu
         if (jenis == 1) {
             menu.tambahMenuMakanan(namaMenu, harga);
         } else if (jenis == 2) {
@@ -49,7 +49,7 @@ public class Restaurant {
             System.out.println("Belum ada menu yang tersedia.");
         } else {
             for (Menu menu : menuList) {
-                System.out.println("Daftar Menu Restoran " + menu.getIdRestoran() + ":");
+                System.out.println("Daftar Menu Restoran " + menu.getRestaurant().getNama() + " (ID: " + menu.getRestaurant().getId() + "):");
                 System.out.println("-------------------------"); // Garis untuk memisahkan setiap restoran
 
                 System.out.println("Makanan:");
