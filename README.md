@@ -7,5 +7,5 @@
 - **TUGAS 1**  --> Click directory/Folder Tugas 1_FODOL (FOOD ONLINE)
     > Ida Bagus Agung Wiswa Pramana (2305551092) dan I Gusti Agung Ngurah Lucien Yudistira Purnawarman (2305551152)
 
-- **TUGAS 2**  --> Click directory/Folder Tugas 2_APIsubscription
+- **TUGAS 2**  --> Click directory/Folder Tugas 2_API_subscription
     > Ida Bagus Agung Wiswa Pramana (2305551092) dan I Gusti Agung Ngurah Lucien Yudistira Purnawarman (2305551152)
