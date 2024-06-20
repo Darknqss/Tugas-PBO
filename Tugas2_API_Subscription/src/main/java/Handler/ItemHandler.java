@@ -4,10 +4,11 @@ import com.sun.net.httpserver.HttpExchange;
 import com.sun.net.httpserver.HttpHandler;
 import database.DatabaseConnection;
 import Model.Item;
-import Util.ErrorResponse;
+import ErrorHandler.ErrorResponse;
 import org.json.JSONObject;
 
 import java.io.*;
+import java.net.HttpURLConnection;
 import java.sql.*;
 import java.util.ArrayList;
 import java.util.List;
@@ -183,7 +184,7 @@ public class ItemHandler implements HttpHandler {
 
     private void updateItem(HttpExchange exchange) throws IOException {
         String[] parts = exchange.getRequestURI().getPath().split("/");
-        int itemId = Integer.parseInt(parts[2]);
+        int itemId = Integer.parseInt(parts[parts.length - 1]); // Ambil ID item dari path
 
         BufferedReader reader = new BufferedReader(new InputStreamReader(exchange.getRequestBody()));
         StringBuilder requestBody = new StringBuilder();
@@ -194,12 +195,15 @@ public class ItemHandler implements HttpHandler {
         JSONObject json = new JSONObject(requestBody.toString());
 
         try (Connection conn = DatabaseConnection.getConnection()) {
+            // Cek apakah JSON mengandung kunci "is_active"
+            boolean isActive = json.has("is_active") ? json.getBoolean("is_active") : false;
+
             String sql = "UPDATE items SET name = ?, price = ?, type = ?, is_active = ? WHERE id = ?";
             PreparedStatement stmt = conn.prepareStatement(sql);
             stmt.setString(1, json.getString("name"));
             stmt.setDouble(2, json.getDouble("price"));
             stmt.setString(3, json.getString("type"));
-            stmt.setBoolean(4, json.getBoolean("is_active"));
+            stmt.setBoolean(4, isActive); // Menggunakan nilai is_active dari JSON atau false jika tidak ada
             stmt.setInt(5, itemId);
             int rowsUpdated = stmt.executeUpdate();
 
@@ -208,7 +212,7 @@ public class ItemHandler implements HttpHandler {
             } else {
                 sendResponse(exchange, 404, ErrorResponse.create("Item not found"));
             }
-        } catch (Exception e) {
+        } catch (SQLException e) {
             e.printStackTrace();
             sendResponse(exchange, 500, ErrorResponse.create("Could not update item"));
         }
@@ -216,22 +220,22 @@ public class ItemHandler implements HttpHandler {
 
     private void deleteItem(HttpExchange exchange) throws IOException {
         String[] parts = exchange.getRequestURI().getPath().split("/");
-        int itemId = Integer.parseInt(parts[2]);
+        int itemId = Integer.parseInt(parts[parts.length - 1]); // Ambil ID item dari path
 
         try (Connection conn = DatabaseConnection.getConnection()) {
-            String sql = "UPDATE items SET is_active = false WHERE id = ?";
+            String sql = "DELETE FROM items WHERE id = ?";
             PreparedStatement stmt = conn.prepareStatement(sql);
             stmt.setInt(1, itemId);
-            int rowsUpdated = stmt.executeUpdate();
+            int rowsDeleted = stmt.executeUpdate();
 
-            if (rowsUpdated > 0) {
-                sendResponse(exchange, 200, "{\"message\":\"Item deactivated\"}");
+            if (rowsDeleted > 0) {
+                sendResponse(exchange, 200, "{\"message\":\"Item deleted\"}");
             } else {
                 sendResponse(exchange, 404, ErrorResponse.create("Item not found"));
             }
-        } catch (Exception e) {
+        } catch (SQLException e) {
             e.printStackTrace();
-            sendResponse(exchange, 500, ErrorResponse.create("Could not deactivate item"));
+            sendResponse(exchange, 500, ErrorResponse.create("Could not delete item"));
         }
     }
 

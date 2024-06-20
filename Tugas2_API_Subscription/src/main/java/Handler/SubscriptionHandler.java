@@ -4,7 +4,7 @@ import com.sun.net.httpserver.HttpExchange;
 import com.sun.net.httpserver.HttpHandler;
 import database.DatabaseConnection;
 import Model.Subscription;
-import Util.ErrorResponse;
+import ErrorHandler.ErrorResponse;
 import org.json.JSONObject;
 
 import java.io.*;
