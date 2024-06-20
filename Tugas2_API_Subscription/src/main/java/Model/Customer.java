@@ -1,5 +1,10 @@
 package Model;
 
+import org.json.JSONArray;
+import org.json.JSONObject;
+
+import java.util.List;
+
 public class Customer {
 
     private int id;
@@ -7,8 +12,9 @@ public class Customer {
     private String firstName;
     private String lastName;
     private String phoneNumber;
+    private List<String> addresses;
 
-    // Construktors
+    // Constructors, getters, and setters
     public Customer() {
     }
 
@@ -20,26 +26,69 @@ public class Customer {
         this.phoneNumber = phoneNumber;
     }
 
-    // Getters and setters
-    public int getId() { return id; }
-    public void setId(int id) { this.id = id; }
+    public int getId() {
+        return id;
+    }
 
-    public String getEmail() { return email; }
-    public void setEmail(String email) { this.email = email; }
+    public void setId(int id) {
+        this.id = id;
+    }
 
-    public String getFirstName() { return firstName; }
-    public void setFirstName(String firstName) { this.firstName = firstName; }
+    public String getEmail() {
+        return email;
+    }
 
-    public String getLastName() { return lastName; }
-    public void setLastName(String lastName) { this.lastName = lastName; }
+    public void setEmail(String email) {
+        this.email = email;
+    }
 
-    public String getPhoneNumber() { return phoneNumber; }
-    public void setPhoneNumber(String phoneNumber) { this.phoneNumber = phoneNumber; }
+    public String getFirstName() {
+        return firstName;
+    }
 
-    // Override toString() method to represent the object as a JSON-like string
-    @Override
-    public String toString() {
-        return String.format("{\"id\":%d,\"email\":\"%s\",\"firstName\":\"%s\",\"lastName\":\"%s\",\"phoneNumber\":\"%s\"}",
-                id, email, firstName, lastName, phoneNumber);
+    public void setFirstName(String firstName) {
+        this.firstName = firstName;
+    }
+
+    public String getLastName() {
+        return lastName;
+    }
+
+    public void setLastName(String lastName) {
+        this.lastName = lastName;
+    }
+
+    public String getPhoneNumber() {
+        return phoneNumber;
+    }
+
+    public void setPhoneNumber(String phoneNumber) {
+        this.phoneNumber = phoneNumber;
+    }
+
+    public List<String> getAddresses() {
+        return addresses;
+    }
+
+    public void setAddresses(List<String> addresses) {
+        this.addresses = addresses;
+    }
+
+    // Method to convert Customer object to JSON object
+    public JSONObject toJSON() {
+        JSONObject json = new JSONObject();
+        json.put("id", id);
+        json.put("email", email);
+        json.put("first_name", firstName);
+        json.put("last_name", lastName);
+        json.put("phone_number", phoneNumber);
+
+        // Adding addresses if present
+        if (addresses != null && !addresses.isEmpty()) {
+            JSONArray addressesArray = new JSONArray(addresses);
+            json.put("addresses", addressesArray);
+        }
+
+        return json;
     }
 }

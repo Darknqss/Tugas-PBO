@@ -1,6 +1,9 @@
 package Handler;
 
 import Model.Customer;
+import Model.Subscription;
+import Model.SubscriptionItem;
+import com.fasterxml.jackson.databind.ObjectMapper;
 import com.sun.net.httpserver.HttpExchange;
 import com.sun.net.httpserver.HttpHandler;
 import database.DatabaseConnection;
@@ -9,10 +12,7 @@ import org.json.JSONObject;
 
 import java.io.*;
 import java.net.HttpURLConnection;
-import java.sql.Connection;
-import java.sql.PreparedStatement;
-import java.sql.ResultSet;
-import java.sql.Statement;
+import java.sql.*;
 import java.util.ArrayList;
 import java.util.List;
 
@@ -62,6 +62,9 @@ public class CustomerHandler implements HttpHandler {
                     } else if (path.matches("/customers/\\d+/subscriptions/?")) {
                         // Memproses permintaan GET untuk daftar subscriptions pelanggan
                         getCustomerSubscriptions(exchange);
+                    } else if (path.matches("/customers/\\d+/subscriptions\\?subscriptions_status=(active|cancelled|non-renewing)")) {
+                        // Memproses permintaan GET untuk subscriptions pelanggan dengan status tertentu
+                        getCustomerSubscriptionsByStatus(exchange);
                     } else {
                         // Jika endpoint tidak ditemukan, kirim respons HTTP 404 (Not Found)
                         sendResponse(exchange, HttpURLConnection.HTTP_NOT_FOUND, "{\"error\":\"Endpoint not found\"}");
@@ -69,7 +72,7 @@ public class CustomerHandler implements HttpHandler {
                     break;
                 case "POST":
                     if (path.matches("/customers/?")) {
-                        addCustomers(exchange);
+                        addCustomer(exchange);
                     } else {
                         sendResponse(exchange, HttpURLConnection.HTTP_NOT_FOUND, "{\"error\":\"Endpoint not found\"}");
                     }
@@ -88,10 +91,10 @@ public class CustomerHandler implements HttpHandler {
                     break;
                 case "DELETE":
                     if (path.matches("/customers/\\d+/?")) {
-                        // Memproses permintaan DELETE untuk menghapus pelanggan berdasarkan ID
                         deleteCustomer(exchange);
+                    } else if (path.matches("/customers/\\d+/cards/\\d+/?")) {
+                        deleteCustomerCard(exchange);
                     } else {
-                        // Jika endpoint DELETE tidak ditemukan, kirim respons HTTP 404 (Not Found)
                         sendResponse(exchange, HttpURLConnection.HTTP_NOT_FOUND, "{\"error\":\"Endpoint not found\"}");
                     }
                     break;
@@ -152,8 +155,9 @@ public class CustomerHandler implements HttpHandler {
                         customer.setFirstName(rs.getString("first_name"));
                         customer.setLastName(rs.getString("last_name"));
                         customer.setPhoneNumber(rs.getString("phone_number"));
+
                         // Mengirimkan respons dengan status 200 (OK) dan data pelanggan dalam format JSON
-                        sendResponse(exchange, HttpURLConnection.HTTP_OK, customer.toString());
+                        sendResponse(exchange, HttpURLConnection.HTTP_OK, customer.toJSON().toString());
                     } else {
                         // Jika pelanggan tidak ditemukan, kirim respons HTTP 404 (Not Found)
                         sendResponse(exchange, HttpURLConnection.HTTP_NOT_FOUND, "{\"error\":\"Customer not found\"}");
@@ -173,19 +177,10 @@ public class CustomerHandler implements HttpHandler {
         String[] parts = exchange.getRequestURI().getPath().split("/");
         int customerId = Integer.parseInt(parts[2]);
 
-        List<String> cards = new ArrayList<>();
         try (Connection conn = DatabaseConnection.getConnection()) {
-            String sql = "SELECT * FROM cards WHERE customer_id = ?";
-            try (PreparedStatement stmt = conn.prepareStatement(sql)) {
-                stmt.setInt(1, customerId);
-                try (ResultSet rs = stmt.executeQuery()) {
-                    while (rs.next()) {
-                        // Menambahkan nomor kartu kredit/debit ke dalam daftar
-                        cards.add(rs.getString("card_number"));
-                    }
-                }
-            }
-            // Mengirimkan respons dengan status 200 (OK) dan daftar kartu dalam format JSON
+            List<String> cards = getCustomerCardsFromDatabase(customerId, conn);
+
+            // Mengirimkan respons dengan status 200 (OK) dan daftar kartu kredit/debit dalam format JSON
             sendResponse(exchange, HttpURLConnection.HTTP_OK, new JSONArray(cards).toString());
         } catch (Exception e) {
             e.printStackTrace();
@@ -194,37 +189,36 @@ public class CustomerHandler implements HttpHandler {
         }
     }
 
+    // // Metode untuk mengambil cards dari database berdasarkan ID pelanggan
+    private List<String> getCustomerCardsFromDatabase(int customerId, Connection conn) throws SQLException {
+        List<String> cards = new ArrayList<>();
+        String sql = "SELECT masked_number FROM cards WHERE customer_id = ?";
+        try (PreparedStatement stmt = conn.prepareStatement(sql)) {
+            stmt.setInt(1, customerId);
+            try (ResultSet rs = stmt.executeQuery()) {
+                while (rs.next()) {
+                    cards.add(rs.getString("masked_number"));
+                }
+            }
+        }
+        return cards;
+    }
+
     // Metode untuk mendapatkan daftar subscriptions pelanggan berdasarkan ID
     private void getCustomerSubscriptions(HttpExchange exchange) throws IOException {
         // Mendapatkan ID pelanggan dari URL
         String[] parts = exchange.getRequestURI().getPath().split("/");
         int customerId = Integer.parseInt(parts[2]);
 
-        // Mendapatkan parameter status subscriptions (aktif, cancelled, non-renewing)
-        String subscriptionsStatus = exchange.getRequestURI().getQuery();
-
-        List<String> subscriptions = new ArrayList<>();
         try (Connection conn = DatabaseConnection.getConnection()) {
-            String sql;
-            if (subscriptionsStatus != null && !subscriptionsStatus.isEmpty()) {
-                sql = "SELECT * FROM subscriptions WHERE customer_id = ? AND status = ?";
-            } else {
-                sql = "SELECT * FROM subscriptions WHERE customer_id = ?";
-            }
-            try (PreparedStatement stmt = conn.prepareStatement(sql)) {
-                stmt.setInt(1, customerId);
-                if (subscriptionsStatus != null && !subscriptionsStatus.isEmpty()) {
-                    stmt.setString(2, subscriptionsStatus);
-                }
-                try (ResultSet rs = stmt.executeQuery()) {
-                    while (rs.next()) {
-                        // Menambahkan informasi subscriptions ke dalam daftar
-                        subscriptions.add(rs.getString("subscription_info"));
-                    }
-                }
-            }
+            List<Subscription> subscriptions = getAllCustomerSubscriptionsFromDatabase(customerId, conn);
+
+            // Serialize subscriptions to JSON
+            ObjectMapper mapper = new ObjectMapper();
+            String jsonResponse = mapper.writeValueAsString(subscriptions);
+
             // Mengirimkan respons dengan status 200 (OK) dan daftar subscriptions dalam format JSON
-            sendResponse(exchange, HttpURLConnection.HTTP_OK, new JSONArray(subscriptions).toString());
+            sendResponse(exchange, HttpURLConnection.HTTP_OK, jsonResponse);
         } catch (Exception e) {
             e.printStackTrace();
             // Jika terjadi kesalahan, kirim respons HTTP 500 (Internal Server Error)
@@ -232,62 +226,87 @@ public class CustomerHandler implements HttpHandler {
         }
     }
 
-    // Metode untuk menambahkan banyak pelanggan baru dari JSON array
-    private void addCustomers(HttpExchange exchange) throws IOException {
-        // Membaca body permintaan untuk mendapatkan data pelanggan baru
-        BufferedReader reader = new BufferedReader(new InputStreamReader(exchange.getRequestBody()));
-        StringBuilder requestBody = new StringBuilder();
-        String line;
-        while ((line = reader.readLine()) != null) {
-            requestBody.append(line);
+
+    // Metode untuk mengambil semua langganan dari database berdasarkan ID pelanggan
+    private List<Subscription> getAllCustomerSubscriptionsFromDatabase(int customerId, Connection conn) throws SQLException {
+        List<Subscription> subscriptions = new ArrayList<>();
+        String sql = "SELECT * FROM subscriptions WHERE customer_id = ?";
+        try (PreparedStatement stmt = conn.prepareStatement(sql)) {
+            stmt.setInt(1, customerId);
+            try (ResultSet rs = stmt.executeQuery()) {
+                while (rs.next()) {
+                    Subscription subscription = new Subscription();
+                    subscription.setId(rs.getInt("id"));
+                    subscription.setCustomerId(rs.getInt("customer_id"));
+                    subscription.setBillingPeriod(rs.getString("billing_period"));
+                    subscription.setBillingPeriodUnit(rs.getString("billing_period_unit"));
+                    subscription.setTotalDue(rs.getDouble("total_due"));
+                    subscription.setActivatedAt(rs.getTimestamp("activated_at"));
+                    subscription.setCurrentTermStart(rs.getTimestamp("current_term_start"));
+                    subscription.setCurrentTermEnd(rs.getTimestamp("current_term_end"));
+                    subscription.setStatus(rs.getString("status"));
+
+                    subscriptions.add(subscription);
+                }
+            }
         }
-        JSONArray jsonArray = new JSONArray(requestBody.toString());
+        return subscriptions;
+    }
+
+
+    // Metode untuk mendapatkan daftar subscriptions pelanggan berdasarkan status subscriptions
+    private void getCustomerSubscriptionsByStatus(HttpExchange exchange) throws IOException {
+        // Mendapatkan ID pelanggan dan status subscriptions dari URL
+        String[] parts = exchange.getRequestURI().getPath().split("/");
+        int customerId = Integer.parseInt(parts[2]);
+        String subscriptionsStatus = exchange.getRequestURI().getQuery().split("=")[1];
 
         try (Connection conn = DatabaseConnection.getConnection()) {
-            // SQL untuk menambahkan pelanggan baru ke dalam database
-            String sql = "INSERT INTO customers (id, email, first_name, last_name, phone_number) VALUES (?, ?, ?, ?, ?)";
-            try (PreparedStatement stmt = conn.prepareStatement(sql, Statement.RETURN_GENERATED_KEYS)) {
-                // Melakukan pengulangan untuk setiap objek pelanggan dalam array JSON
-                for (int i = 0; i < jsonArray.length(); i++) {
-                    JSONObject json = jsonArray.getJSONObject(i);
+            List<String> subscriptions = getCustomerSubscriptionsByStatus(customerId, subscriptionsStatus, conn);
 
-                    // Memeriksa apakah ID pelanggan disertakan dalam JSON
-                    if (!json.has("id")) {
-                        sendResponse(exchange, HttpURLConnection.HTTP_BAD_REQUEST, "{\"error\":\"Missing ID for customer " + i + "\"}");
-                        return;
-                    }
-
-                    stmt.setInt(1, json.getInt("id"));
-                    stmt.setString(2, json.getString("email"));
-                    stmt.setString(3, json.getString("first_name"));
-                    stmt.setString(4, json.getString("last_name"));
-                    stmt.setString(5, json.getString("phone_number"));
-
-                    stmt.addBatch(); // Menambahkan pernyataan ke batch untuk eksekusi bersamaan
-                }
-
-                // Menjalankan batch untuk menambahkan semua pelanggan ke database
-                int[] rowsInserted = stmt.executeBatch();
-
-                // Memeriksa hasil setiap operasi penambahan
-                for (int rows : rowsInserted) {
-                    if (rows <= 0) {
-                        // Jika salah satu pelanggan tidak berhasil ditambahkan
-                        sendResponse(exchange, HttpURLConnection.HTTP_INTERNAL_ERROR, "{\"error\":\"Failed to add customers\"}");
-                        return;
-                    }
-                }
-
-                // Jika berhasil menambahkan semua pelanggan
-                sendResponse(exchange, HttpURLConnection.HTTP_OK, "{\"message\":\"Customers added successfully\"}");
-            }
+            // Mengirimkan respons dengan status 200 (OK) dan daftar subscriptions berdasarkan status dalam format JSON
+            sendResponse(exchange, HttpURLConnection.HTTP_OK, new JSONArray(subscriptions).toString());
         } catch (Exception e) {
             e.printStackTrace();
             // Jika terjadi kesalahan, kirim respons HTTP 500 (Internal Server Error)
-            sendResponse(exchange, HttpURLConnection.HTTP_INTERNAL_ERROR, "{\"error\":\"Could not add customers\"}");
+            sendResponse(exchange, HttpURLConnection.HTTP_INTERNAL_ERROR, "{\"error\":\"Could not retrieve customer subscriptions by status\"}");
         }
     }
 
+    // Metode untuk menambahkan pelanggan baru
+    private void addCustomer(HttpExchange exchange) throws IOException {
+        // Mendapatkan payload (data JSON) dari body permintaan
+        String requestBody = new BufferedReader(new InputStreamReader(exchange.getRequestBody()))
+                .lines().reduce("", (accumulator, actual) -> accumulator + actual);
+
+        try {
+            // Parsing JSON payload ke objek Customer
+            JSONObject jsonObject = new JSONObject(requestBody);
+            String email = jsonObject.getString("email");
+            String firstName = jsonObject.getString("first_name");
+            String lastName = jsonObject.getString("last_name");
+            String phoneNumber = jsonObject.getString("phone_number");
+
+            // Validasi data pelanggan (contoh sederhana)
+            if (email.isEmpty() || firstName.isEmpty() || lastName.isEmpty() || phoneNumber.isEmpty()) {
+                // Jika data tidak lengkap, kirim respons HTTP 400 (Bad Request)
+                sendResponse(exchange, HttpURLConnection.HTTP_BAD_REQUEST, "{\"error\":\"Missing required fields\"}");
+                return;
+            }
+
+            // Simpan data pelanggan ke database
+            int customerId = saveCustomer(email, firstName, lastName, phoneNumber);
+
+            // Jika berhasil disimpan, kirim respons HTTP 201 (Created) dengan ID pelanggan baru
+            JSONObject responseJson = new JSONObject();
+            responseJson.put("id", customerId);
+            sendResponse(exchange, HttpURLConnection.HTTP_CREATED, responseJson.toString());
+        } catch (Exception e) {
+            e.printStackTrace();
+            // Jika terjadi kesalahan, kirim respons HTTP 500 (Internal Server Error)
+            sendResponse(exchange, HttpURLConnection.HTTP_INTERNAL_ERROR, "{\"error\":\"Could not add customer\"}");
+        }
+    }
 
     // Metode untuk memperbarui data pelanggan berdasarkan ID
     private void updateCustomer(HttpExchange exchange) throws IOException {
@@ -295,34 +314,30 @@ public class CustomerHandler implements HttpHandler {
         String[] parts = exchange.getRequestURI().getPath().split("/");
         int customerId = Integer.parseInt(parts[2]);
 
-        // Membaca body permintaan untuk mendapatkan data pelanggan yang baru
-        BufferedReader reader = new BufferedReader(new InputStreamReader(exchange.getRequestBody()));
-        StringBuilder requestBody = new StringBuilder();
-        String line;
-        while ((line = reader.readLine()) != null) {
-            requestBody.append(line);
-        }
-        JSONObject json = new JSONObject(requestBody.toString());
+        // Mendapatkan payload (data JSON) dari body permintaan
+        String requestBody = new BufferedReader(new InputStreamReader(exchange.getRequestBody()))
+                .lines().reduce("", (accumulator, actual) -> accumulator + actual);
 
-        try (Connection conn = DatabaseConnection.getConnection()) {
-            // SQL untuk melakukan update data pelanggan
-            String sql = "UPDATE customers SET email = ?, first_name = ?, last_name = ?, phone_number = ? WHERE id = ?";
-            try (PreparedStatement stmt = conn.prepareStatement(sql)) {
-                stmt.setString(1, json.getString("email"));
-                stmt.setString(2, json.getString("first_name"));
-                stmt.setString(3, json.getString("last_name"));
-                stmt.setString(4, json.getString("phone_number"));
-                stmt.setInt(5, customerId);
-                int rowsUpdated = stmt.executeUpdate();
+        try {
+            // Parsing JSON payload ke objek Customer
+            JSONObject jsonObject = new JSONObject(requestBody);
+            String email = jsonObject.getString("email");
+            String firstName = jsonObject.getString("first_name");
+            String lastName = jsonObject.getString("last_name");
+            String phoneNumber = jsonObject.getString("phone_number");
 
-                if (rowsUpdated > 0) {
-                    // Jika data berhasil diperbarui, kirim respons HTTP 200 (OK)
-                    sendResponse(exchange, HttpURLConnection.HTTP_OK, "{\"message\":\"Customer updated\"}");
-                } else {
-                    // Jika pelanggan tidak ditemukan, kirim respons HTTP 404 (Not Found)
-                    sendResponse(exchange, HttpURLConnection.HTTP_NOT_FOUND, "{\"error\":\"Customer not found\"}");
-                }
+            // Validasi data pelanggan (contoh sederhana)
+            if (email.isEmpty() || firstName.isEmpty() || lastName.isEmpty() || phoneNumber.isEmpty()) {
+                // Jika data tidak lengkap, kirim respons HTTP 400 (Bad Request)
+                sendResponse(exchange, HttpURLConnection.HTTP_BAD_REQUEST, "{\"error\":\"Missing required fields\"}");
+                return;
             }
+
+            // Perbarui data pelanggan di database
+            updateCustomer(customerId, email, firstName, lastName, phoneNumber);
+
+            // Mengirimkan respons dengan status 204 (No Content) untuk mengindikasikan berhasil diperbarui
+            sendResponse(exchange, HttpURLConnection.HTTP_NO_CONTENT, "");
         } catch (Exception e) {
             e.printStackTrace();
             // Jika terjadi kesalahan, kirim respons HTTP 500 (Internal Server Error)
@@ -332,89 +347,51 @@ public class CustomerHandler implements HttpHandler {
 
     // Metode untuk memperbarui alamat pengiriman pelanggan berdasarkan ID
     private void updateShippingAddress(HttpExchange exchange) throws IOException {
-        // Implementasi akan ditambahkan sesuai dengan kebutuhan dan skema database
-        sendResponse(exchange, HttpURLConnection.HTTP_NOT_IMPLEMENTED, "{\"error\":\"Not Implemented\"}");
-    }
-
-    // Metode untuk menonaktifkan produk berdasarkan ID
-    private void deactivateItem(HttpExchange exchange) throws IOException {
-        // Mendapatkan ID item dari URL
-        String[] parts = exchange.getRequestURI().getPath().split("/");
-        int itemId = Integer.parseInt(parts[2]);
-
-        try (Connection conn = DatabaseConnection.getConnection()) {
-            // SQL untuk menonaktifkan produk berdasarkan ID
-            String sql = "UPDATE items SET is_active = false WHERE id = ?";
-            try (PreparedStatement stmt = conn.prepareStatement(sql)) {
-                stmt.setInt(1, itemId);
-                int rowsUpdated = stmt.executeUpdate();
-
-                if (rowsUpdated > 0) {
-                    // Jika produk berhasil dinonaktifkan, kirim respons HTTP 200 (OK)
-                    sendResponse(exchange, HttpURLConnection.HTTP_OK, "{\"message\":\"Item deactivated\"}");
-                } else {
-                    // Jika produk tidak ditemukan, kirim respons HTTP 404 (Not Found)
-                    sendResponse(exchange, HttpURLConnection.HTTP_NOT_FOUND, "{\"error\":\"Item not found\"}");
-                }
-            }
-        } catch (Exception e) {
-            e.printStackTrace();
-            // Jika terjadi kesalahan, kirim respons HTTP 500 (Internal Server Error)
-            sendResponse(exchange, HttpURLConnection.HTTP_INTERNAL_ERROR, "{\"error\":\"Could not deactivate item\"}");
-        }
-    }
-
-    // Metode untuk menghapus kartu kredit pelanggan berdasarkan ID jika is_primary bernilai false
-    private void deleteCustomerCard(HttpExchange exchange) throws IOException {
-        // Mendapatkan ID pelanggan dan ID kartu dari URL
+        // Mendapatkan ID pelanggan dan ID alamat dari URL
         String[] parts = exchange.getRequestURI().getPath().split("/");
         int customerId = Integer.parseInt(parts[2]);
-        int cardId = Integer.parseInt(parts[4]);
+        int addressId = Integer.parseInt(parts[4]);
 
-        try (Connection conn = DatabaseConnection.getConnection()) {
-            // SQL untuk menghapus kartu kredit pelanggan jika is_primary bernilai false
-            String sql = "DELETE FROM cards WHERE id = ? AND customer_id = ? AND is_primary = false";
-            try (PreparedStatement stmt = conn.prepareStatement(sql)) {
-                stmt.setInt(1, cardId);
-                stmt.setInt(2, customerId);
-                int rowsDeleted = stmt.executeUpdate();
+        // Mendapatkan payload (data JSON) dari body permintaan
+        String requestBody = new BufferedReader(new InputStreamReader(exchange.getRequestBody()))
+                .lines().reduce("", (accumulator, actual) -> accumulator + actual);
 
-                if (rowsDeleted > 0) {
-                    // Jika kartu kredit berhasil dihapus, kirim respons HTTP 200 (OK)
-                    sendResponse(exchange, HttpURLConnection.HTTP_OK, "{\"message\":\"Customer card deleted\"}");
-                } else {
-                    // Jika kartu kredit tidak ditemukan atau tidak bisa dihapus, kirim respons HTTP 404 (Not Found)
-                    sendResponse(exchange, HttpURLConnection.HTTP_NOT_FOUND, "{\"error\":\"Customer card not found or cannot be deleted\"}");
-                }
+        try {
+            // Parsing JSON payload ke objek alamat pengiriman
+            JSONObject jsonObject = new JSONObject(requestBody);
+            String address = jsonObject.getString("address");
+
+            // Validasi data alamat
+            if (address.isEmpty()) {
+                // Jika data tidak lengkap, kirim respons HTTP 400 (Bad Request)
+                sendResponse(exchange, HttpURLConnection.HTTP_BAD_REQUEST, "{\"error\":\"Missing required fields\"}");
+                return;
             }
+
+            // Perbarui data alamat pengiriman di database
+            updateShippingAddress(addressId, address);
+
+            // Mengirimkan respons dengan status 204 (No Content) untuk mengindikasikan berhasil diperbarui
+            sendResponse(exchange, HttpURLConnection.HTTP_NO_CONTENT, "");
         } catch (Exception e) {
             e.printStackTrace();
             // Jika terjadi kesalahan, kirim respons HTTP 500 (Internal Server Error)
-            sendResponse(exchange, HttpURLConnection.HTTP_INTERNAL_ERROR, "{\"error\":\"Could not delete customer card\"}");
+            sendResponse(exchange, HttpURLConnection.HTTP_INTERNAL_ERROR, "{\"error\":\"Could not update shipping address\"}");
         }
     }
 
-    // Metode untuk menghapus data pelanggan berdasarkan ID
+    // Metode untuk menghapus pelanggan berdasarkan ID
     private void deleteCustomer(HttpExchange exchange) throws IOException {
         // Mendapatkan ID pelanggan dari URL
         String[] parts = exchange.getRequestURI().getPath().split("/");
         int customerId = Integer.parseInt(parts[2]);
 
-        try (Connection conn = DatabaseConnection.getConnection()) {
-            // SQL untuk menghapus pelanggan berdasarkan ID
-            String sql = "DELETE FROM customers WHERE id = ?";
-            try (PreparedStatement stmt = conn.prepareStatement(sql)) {
-                stmt.setInt(1, customerId);
-                int rowsDeleted = stmt.executeUpdate();
+        try {
+            // Hapus pelanggan dari database
+            deleteCustomer(customerId);
 
-                if (rowsDeleted > 0) {
-                    // Jika pelanggan berhasil dihapus, kirim respons HTTP 200 (OK)
-                    sendResponse(exchange, HttpURLConnection.HTTP_OK, "{\"message\":\"Customer deleted\"}");
-                } else {
-                    // Jika pelanggan tidak ditemukan, kirim respons HTTP 404 (Not Found)
-                    sendResponse(exchange, HttpURLConnection.HTTP_NOT_FOUND, "{\"error\":\"Customer not found\"}");
-                }
-            }
+            // Mengirimkan respons dengan status 204 (No Content) untuk mengindikasikan berhasil dihapus
+            sendResponse(exchange, HttpURLConnection.HTTP_NO_CONTENT, "");
         } catch (Exception e) {
             e.printStackTrace();
             // Jika terjadi kesalahan, kirim respons HTTP 500 (Internal Server Error)
@@ -422,12 +399,144 @@ public class CustomerHandler implements HttpHandler {
         }
     }
 
+    // Metode untuk menghapus kartu kredit/debit pelanggan berdasarkan ID kartu
+    private void deleteCustomerCard(HttpExchange exchange) throws IOException {
+        // Mendapatkan ID pelanggan dan ID kartu dari URL
+        String[] parts = exchange.getRequestURI().getPath().split("/");
+        int customerId = Integer.parseInt(parts[2]);
+        int cardId = Integer.parseInt(parts[4]);
 
-    // Metode untuk mengirimkan respons HTTP
+        try {
+            // Hapus kartu kredit/debit dari database
+            deleteCustomerCard(cardId);
+
+            // Mengirimkan respons dengan status 204 (No Content) untuk mengindikasikan berhasil dihapus
+            sendResponse(exchange, HttpURLConnection.HTTP_NO_CONTENT, "");
+        } catch (Exception e) {
+            e.printStackTrace();
+            // Jika terjadi kesalahan, kirim respons HTTP 500 (Internal Server Error)
+            sendResponse(exchange, HttpURLConnection.HTTP_INTERNAL_ERROR, "{\"error\":\"Could not delete customer card\"}");
+        }
+    }
+
+    // Metode untuk mengirimkan respons HTTP dengan status dan data tertentu
     private void sendResponse(HttpExchange exchange, int statusCode, String response) throws IOException {
+        exchange.getResponseHeaders().set("Content-Type", "application/json");
         exchange.sendResponseHeaders(statusCode, response.getBytes().length);
         OutputStream os = exchange.getResponseBody();
         os.write(response.getBytes());
         os.close();
+    }
+
+    // Method to save customer to database and return the generated customer ID
+    private int saveCustomer(String email, String firstName, String lastName, String phoneNumber) throws SQLException {
+        String sql = "INSERT INTO customers (email, first_name, last_name, phone_number) VALUES (?, ?, ?, ?)";
+        try (Connection conn = DatabaseConnection.getConnection();
+             PreparedStatement stmt = conn.prepareStatement(sql, Statement.RETURN_GENERATED_KEYS)) {
+            stmt.setString(1, email);
+            stmt.setString(2, firstName);
+            stmt.setString(3, lastName);
+            stmt.setString(4, phoneNumber);
+
+            int affectedRows = stmt.executeUpdate();
+            if (affectedRows == 0) {
+                throw new SQLException("Creating customer failed, no rows affected.");
+            }
+
+            try (ResultSet generatedKeys = stmt.getGeneratedKeys()) {
+                if (generatedKeys.next()) {
+                    return generatedKeys.getInt(1); // Return the generated customer ID
+                } else {
+                    throw new SQLException("Creating customer failed, no ID obtained.");
+                }
+            }
+        }
+    }
+
+    // Method to update customer information in the database
+    private void updateCustomer(int customerId, String email, String firstName, String lastName, String phoneNumber) throws SQLException {
+        String sql = "UPDATE customers SET email = ?, first_name = ?, last_name = ?, phone_number = ? WHERE id = ?";
+        try (Connection conn = DatabaseConnection.getConnection();
+             PreparedStatement stmt = conn.prepareStatement(sql)) {
+            stmt.setString(1, email);
+            stmt.setString(2, firstName);
+            stmt.setString(3, lastName);
+            stmt.setString(4, phoneNumber);
+            stmt.setInt(5, customerId);
+
+            int affectedRows = stmt.executeUpdate();
+            if (affectedRows == 0) {
+                throw new SQLException("Updating customer failed, no rows affected.");
+            }
+        }
+    }
+
+    private void updateShippingAddress(int addressId, String address) throws SQLException {
+        String sql = "UPDATE shipping_addresses SET address = ? WHERE id = ?";
+        try (Connection conn = DatabaseConnection.getConnection();
+             PreparedStatement stmt = conn.prepareStatement(sql)) {
+            stmt.setString(1, address);
+            stmt.setInt(2, addressId);
+
+            int affectedRows = stmt.executeUpdate();
+            if (affectedRows == 0) {
+                throw new SQLException("Updating shipping address failed, no rows affected.");
+            }
+        }
+    }
+
+    private void deleteCustomer(int customerId) throws SQLException {
+        String sql = "DELETE FROM customers WHERE id = ?";
+        try (Connection conn = DatabaseConnection.getConnection();
+             PreparedStatement stmt = conn.prepareStatement(sql)) {
+            stmt.setInt(1, customerId);
+
+            int affectedRows = stmt.executeUpdate();
+            if (affectedRows == 0) {
+                throw new SQLException("Deleting customer failed, no rows affected.");
+            }
+        }
+    }
+
+    private void deleteCustomerCard(int cardId) throws SQLException {
+        String sql = "DELETE FROM cards WHERE id = ?";
+        try (Connection conn = DatabaseConnection.getConnection();
+             PreparedStatement stmt = conn.prepareStatement(sql)) {
+            stmt.setInt(1, cardId);
+
+            int affectedRows = stmt.executeUpdate();
+            if (affectedRows == 0) {
+                throw new SQLException("Deleting customer card failed, no rows affected.");
+            }
+        }
+    }
+
+    private List<String> getCustomerSubscriptions(int customerId, Connection conn) throws SQLException {
+        List<String> subscriptions = new ArrayList<>();
+        String sql = "SELECT subscription_name FROM customer_subscriptions WHERE customer_id = ?";
+        try (PreparedStatement stmt = conn.prepareStatement(sql)) {
+            stmt.setInt(1, customerId);
+            try (ResultSet rs = stmt.executeQuery()) {
+                while (rs.next()) {
+                    subscriptions.add(rs.getString("subscription_name"));
+                }
+            }
+        }
+        return subscriptions;
+    }
+
+    private List<String> getCustomerSubscriptionsByStatus(int customerId, String status, Connection conn) throws SQLException {
+        List<String> subscriptions = new ArrayList<>();
+        String sql = "SELECT * FROM customer_subscriptions WHERE customer_id = ? AND subscription_status = ?";
+        try (PreparedStatement stmt = conn.prepareStatement(sql)) {
+            stmt.setInt(1, customerId);
+            stmt.setString(2, status);
+            try (ResultSet rs = stmt.executeQuery()) {
+                while (rs.next()) {
+                    subscriptions.add(rs.getString("subscription_name"));
+                }
+            }
+        }
+        return subscriptions;
     }
 }
