@@ -17,6 +17,7 @@ public class ItemHandler implements HttpHandler {
 
     private final String apiKey;
 
+    // Konstruktor untuk ItemHandler yang menerima apiKey
     public ItemHandler(String apiKey) {
         this.apiKey = apiKey;
     }
@@ -27,7 +28,7 @@ public class ItemHandler implements HttpHandler {
         String path = exchange.getRequestURI().getPath();
         String authHeader = exchange.getRequestHeaders().getFirst("Authorization");
 
-        // Verifikasi API key
+        // Verifikasi API key dari header permintaan
         if (!(apiKey).equals(authHeader)) {
             sendResponse(exchange, 403, ErrorResponse.create("Forbidden"));
             return;
@@ -35,32 +36,33 @@ public class ItemHandler implements HttpHandler {
 
         try {
             if ("GET".equalsIgnoreCase(method)) {
+                // Jika metode GET, periksa endpoint mana yang diakses
                 if (path.matches("/items/?")) {
                     if (exchange.getRequestURI().getQuery() != null && exchange.getRequestURI().getQuery().contains("is_active=true")) {
-                        getAllActiveItems(exchange);
+                        getAllActiveItems(exchange); // Mendapatkan semua item yang aktif
                     } else {
-                        getAllItems(exchange);
+                        getAllItems(exchange); // Mendapatkan semua item
                     }
                 } else if (path.matches("/items/\\d+/?")) {
-                    getItemById(exchange);
+                    getItemById(exchange); // Mendapatkan item berdasarkan ID
                 } else {
                     sendResponse(exchange, 404, ErrorResponse.create("Endpoint not found"));
                 }
             } else if ("POST".equalsIgnoreCase(method)) {
                 if (path.matches("/items/?")) {
-                    createItem(exchange);
+                    createItem(exchange); // Membuat item baru
                 } else {
                     sendResponse(exchange, 404, ErrorResponse.create("Endpoint not found"));
                 }
             } else if ("PUT".equalsIgnoreCase(method)) {
                 if (path.matches("/items/\\d+/?")) {
-                    updateItem(exchange);
+                    updateItem(exchange); // Memperbarui item berdasarkan ID
                 } else {
                     sendResponse(exchange, 404, ErrorResponse.create("Endpoint not found"));
                 }
             } else if ("DELETE".equalsIgnoreCase(method)) {
                 if (path.matches("/items/\\d+/?")) {
-                    deleteItem(exchange);
+                    deactivateItem(exchange); // Menonaktifkan item berdasarkan ID
                 } else {
                     sendResponse(exchange, 404, ErrorResponse.create("Endpoint not found"));
                 }
@@ -73,6 +75,7 @@ public class ItemHandler implements HttpHandler {
         }
     }
 
+    // Metode untuk mendapatkan semua item dari database
     private void getAllItems(HttpExchange exchange) throws IOException {
         List<Item> items = new ArrayList<>();
         try (Connection conn = DatabaseConnection.getConnection()) {
@@ -80,6 +83,7 @@ public class ItemHandler implements HttpHandler {
             PreparedStatement stmt = conn.prepareStatement(sql);
             ResultSet rs = stmt.executeQuery();
 
+            // Mengambil setiap baris hasil query dan menambahkan ke daftar items
             while (rs.next()) {
                 Item item = new Item();
                 item.setId(rs.getInt("id"));
@@ -90,6 +94,7 @@ public class ItemHandler implements HttpHandler {
                 items.add(item);
             }
 
+            // Mengirimkan daftar items sebagai respons dalam format JSON
             sendResponse(exchange, 200, new JSONObject().put("items", items).toString());
         } catch (Exception e) {
             e.printStackTrace();
@@ -97,6 +102,7 @@ public class ItemHandler implements HttpHandler {
         }
     }
 
+    // Metode untuk mendapatkan semua item yang aktif dari database
     private void getAllActiveItems(HttpExchange exchange) throws IOException {
         List<Item> items = new ArrayList<>();
         try (Connection conn = DatabaseConnection.getConnection()) {
@@ -104,6 +110,7 @@ public class ItemHandler implements HttpHandler {
             PreparedStatement stmt = conn.prepareStatement(sql);
             ResultSet rs = stmt.executeQuery();
 
+            // Mengambil setiap baris hasil query dan menambahkan ke daftar items
             while (rs.next()) {
                 Item item = new Item();
                 item.setId(rs.getInt("id"));
@@ -114,6 +121,7 @@ public class ItemHandler implements HttpHandler {
                 items.add(item);
             }
 
+            // Mengirimkan daftar items aktif sebagai respons dalam format JSON
             sendResponse(exchange, 200, new JSONObject().put("items", items).toString());
         } catch (Exception e) {
             e.printStackTrace();
@@ -121,6 +129,7 @@ public class ItemHandler implements HttpHandler {
         }
     }
 
+    // Metode untuk mendapatkan item berdasarkan ID dari database
     private void getItemById(HttpExchange exchange) throws IOException {
         String[] parts = exchange.getRequestURI().getPath().split("/");
         int itemId = Integer.parseInt(parts[2]);
@@ -132,6 +141,7 @@ public class ItemHandler implements HttpHandler {
             ResultSet rs = stmt.executeQuery();
 
             if (rs.next()) {
+                // Jika item ditemukan, buat objek item dan kirimkan sebagai respons
                 Item item = new Item();
                 item.setId(rs.getInt("id"));
                 item.setName(rs.getString("name"));
@@ -141,6 +151,7 @@ public class ItemHandler implements HttpHandler {
 
                 sendResponse(exchange, 200, item.toString());
             } else {
+                // Jika item tidak ditemukan, kirimkan respons 404
                 sendResponse(exchange, 404, ErrorResponse.create("Item not found"));
             }
         } catch (Exception e) {
@@ -149,6 +160,7 @@ public class ItemHandler implements HttpHandler {
         }
     }
 
+    // Metode untuk membuat item baru di database
     private void createItem(HttpExchange exchange) throws IOException {
         BufferedReader reader = new BufferedReader(new InputStreamReader(exchange.getRequestBody()));
         StringBuilder requestBody = new StringBuilder();
@@ -167,7 +179,7 @@ public class ItemHandler implements HttpHandler {
             stmt.setBoolean(4, json.getBoolean("is_active"));
             stmt.executeUpdate();
 
-            // Retrieve the auto-generated ID of the new item
+            // Mendapatkan ID yang dihasilkan secara otomatis untuk item baru
             ResultSet generatedKeys = stmt.getGeneratedKeys();
             int newItemId;
             if (generatedKeys.next()) {
@@ -182,6 +194,7 @@ public class ItemHandler implements HttpHandler {
         }
     }
 
+    // Metode untuk memperbarui item berdasarkan ID di database
     private void updateItem(HttpExchange exchange) throws IOException {
         String[] parts = exchange.getRequestURI().getPath().split("/");
         int itemId = Integer.parseInt(parts[parts.length - 1]); // Ambil ID item dari path
@@ -208,8 +221,10 @@ public class ItemHandler implements HttpHandler {
             int rowsUpdated = stmt.executeUpdate();
 
             if (rowsUpdated > 0) {
+                // Jika berhasil diperbarui, kirim respons dengan pesan sukses
                 sendResponse(exchange, 200, "{\"message\":\"Item updated\"}");
             } else {
+                // Jika tidak ada baris yang diperbarui, berarti item tidak ditemukan
                 sendResponse(exchange, 404, ErrorResponse.create("Item not found"));
             }
         } catch (SQLException e) {
@@ -218,27 +233,35 @@ public class ItemHandler implements HttpHandler {
         }
     }
 
-    private void deleteItem(HttpExchange exchange) throws IOException {
+    // Metode untuk menonaktifkan item berdasarkan ID (mengatur is_active menjadi false)
+    private void deactivateItem(HttpExchange exchange) throws IOException {
+        // Mendapatkan ID item dari URL
         String[] parts = exchange.getRequestURI().getPath().split("/");
-        int itemId = Integer.parseInt(parts[parts.length - 1]); // Ambil ID item dari path
+        int itemId = Integer.parseInt(parts[parts.length - 1]);
 
         try (Connection conn = DatabaseConnection.getConnection()) {
-            String sql = "DELETE FROM items WHERE id = ?";
-            PreparedStatement stmt = conn.prepareStatement(sql);
-            stmt.setInt(1, itemId);
-            int rowsDeleted = stmt.executeUpdate();
+            // Query untuk mengubah status is_active menjadi false
+            String sql = "UPDATE items SET is_active = false WHERE id = ?";
+            try (PreparedStatement stmt = conn.prepareStatement(sql)) {
+                stmt.setInt(1, itemId);
+                int rowsUpdated = stmt.executeUpdate();
 
-            if (rowsDeleted > 0) {
-                sendResponse(exchange, 200, "{\"message\":\"Item deleted\"}");
-            } else {
-                sendResponse(exchange, 404, ErrorResponse.create("Item not found"));
+                if (rowsUpdated > 0) {
+                    // Jika berhasil diupdate, kirim respons dengan pesan sukses
+                    sendResponse(exchange, 200, "{\"message\":\"Item successfully deactivated\"}");
+                } else {
+                    // Jika tidak ada baris yang diperbarui, berarti item tidak ditemukan
+                    sendResponse(exchange, 404, ErrorResponse.create("Item not found"));
+                }
             }
         } catch (SQLException e) {
             e.printStackTrace();
-            sendResponse(exchange, 500, ErrorResponse.create("Could not delete item"));
+            // Jika ada kesalahan pada query SQL, kirim respons error
+            sendResponse(exchange, 500, ErrorResponse.create("Could not deactivate item"));
         }
     }
 
+    // Metode untuk mengirimkan respons ke klien
     private void sendResponse(HttpExchange exchange, int statusCode, String response) throws IOException {
         exchange.sendResponseHeaders(statusCode, response.getBytes().length);
         OutputStream os = exchange.getResponseBody();

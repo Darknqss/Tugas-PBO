@@ -8,6 +8,7 @@ import com.sun.net.httpserver.HttpExchange;
 import com.sun.net.httpserver.HttpHandler;
 import database.DatabaseConnection;
 import org.json.JSONArray;
+import org.json.JSONException;
 import org.json.JSONObject;
 
 import java.io.*;
@@ -91,7 +92,17 @@ public class CustomerHandler implements HttpHandler {
                     break;
                 case "DELETE":
                     if (path.matches("/customers/\\d+/?")) {
-                        deleteCustomer(exchange);
+                        try {
+                            // Extract customerId from the URI
+                            String[] parts = exchange.getRequestURI().getPath().split("/");
+                            int customerId = Integer.parseInt(parts[2]);
+
+                            // Invoke deleteCustomer method with customerId
+                            deleteCustomer(customerId); // Adjust this line according to your method signature
+                        } catch (NumberFormatException | ArrayIndexOutOfBoundsException e) {
+                            e.printStackTrace();
+                            sendResponse(exchange, HttpURLConnection.HTTP_BAD_REQUEST, "Invalid request");
+                        }
                     } else if (path.matches("/customers/\\d+/cards/\\d+/?")) {
                         deleteCustomerCard(exchange);
                     } else {
@@ -352,72 +363,112 @@ public class CustomerHandler implements HttpHandler {
         int customerId = Integer.parseInt(parts[2]);
         int addressId = Integer.parseInt(parts[4]);
 
-        // Mendapatkan payload (data JSON) dari body permintaan
-        String requestBody = new BufferedReader(new InputStreamReader(exchange.getRequestBody()))
-                .lines().reduce("", (accumulator, actual) -> accumulator + actual);
-
         try {
-            // Parsing JSON payload ke objek alamat pengiriman
-            JSONObject jsonObject = new JSONObject(requestBody);
-            String address = jsonObject.getString("address");
-
-            // Validasi data alamat
-            if (address.isEmpty()) {
-                // Jika data tidak lengkap, kirim respons HTTP 400 (Bad Request)
-                sendResponse(exchange, HttpURLConnection.HTTP_BAD_REQUEST, "{\"error\":\"Missing required fields\"}");
-                return;
+            // Mendapatkan payload (data JSON) dari body permintaan
+            StringBuilder requestBody = new StringBuilder();
+            try (BufferedReader reader = new BufferedReader(new InputStreamReader(exchange.getRequestBody()))) {
+                String line;
+                while ((line = reader.readLine()) != null) {
+                    requestBody.append(line);
+                }
             }
 
-            // Perbarui data alamat pengiriman di database
-            updateShippingAddress(addressId, address);
+            // Parsing JSON payload ke objek alamat pengiriman
+            JSONObject jsonObject = new JSONObject(requestBody.toString());
 
-            // Mengirimkan respons dengan status 204 (No Content) untuk mengindikasikan berhasil diperbarui
-            sendResponse(exchange, HttpURLConnection.HTTP_NO_CONTENT, "");
-        } catch (Exception e) {
+            // Mendapatkan nilai atribut dari JSON
+            String title = jsonObject.optString("title", null);
+            String line1 = jsonObject.optString("line1", null);
+            String line2 = jsonObject.optString("line2", null);
+            String city = jsonObject.optString("city", null);
+            String province = jsonObject.optString("province", null);
+            String postcode = jsonObject.optString("postcode", null);
+
+            // Perbarui data alamat pengiriman di database
+            updateShippingAddressInDatabase(addressId, title, line1, line2, city, province, postcode);
+
+            // Mengirimkan respons dengan status 200 (OK) dan pesan sukses
+            String response = "{\"message\":\"Berhasil diupdate\"}";
+            sendResponse(exchange, HttpURLConnection.HTTP_OK, response);
+        } catch (JSONException | SQLException e) {
             e.printStackTrace();
             // Jika terjadi kesalahan, kirim respons HTTP 500 (Internal Server Error)
             sendResponse(exchange, HttpURLConnection.HTTP_INTERNAL_ERROR, "{\"error\":\"Could not update shipping address\"}");
         }
     }
 
-    // Metode untuk menghapus pelanggan berdasarkan ID
-    private void deleteCustomer(HttpExchange exchange) throws IOException {
-        // Mendapatkan ID pelanggan dari URL
-        String[] parts = exchange.getRequestURI().getPath().split("/");
-        int customerId = Integer.parseInt(parts[2]);
+    // Metode untuk melakukan update alamat pengiriman di database
+    private void updateShippingAddressInDatabase(int addressId, String title, String line1, String line2,
+                                                 String city, String province, String postcode) throws SQLException {
+        String sql = "UPDATE shipping_addresses SET title = ?, line1 = ?, line2 = ?, city = ?, province = ?, postcode = ? WHERE id = ?";
+        try (Connection conn = DatabaseConnection.getConnection();
+             PreparedStatement stmt = conn.prepareStatement(sql)) {
+            stmt.setString(1, title);
+            stmt.setString(2, line1);
+            stmt.setString(3, line2);
+            stmt.setString(4, city);
+            stmt.setString(5, province);
+            stmt.setString(6, postcode);
+            stmt.setInt(7, addressId);
 
-        try {
-            // Hapus pelanggan dari database
-            deleteCustomer(customerId);
-
-            // Mengirimkan respons dengan status 204 (No Content) untuk mengindikasikan berhasil dihapus
-            sendResponse(exchange, HttpURLConnection.HTTP_NO_CONTENT, "");
-        } catch (Exception e) {
-            e.printStackTrace();
-            // Jika terjadi kesalahan, kirim respons HTTP 500 (Internal Server Error)
-            sendResponse(exchange, HttpURLConnection.HTTP_INTERNAL_ERROR, "{\"error\":\"Could not delete customer\"}");
+            int affectedRows = stmt.executeUpdate();
+            if (affectedRows == 0) {
+                throw new SQLException("Updating shipping address failed, no rows affected.");
+            }
         }
     }
 
-    // Metode untuk menghapus kartu kredit/debit pelanggan berdasarkan ID kartu
-    private void deleteCustomerCard(HttpExchange exchange) throws IOException {
-        // Mendapatkan ID pelanggan dan ID kartu dari URL
-        String[] parts = exchange.getRequestURI().getPath().split("/");
-        int customerId = Integer.parseInt(parts[2]);
-        int cardId = Integer.parseInt(parts[4]);
 
+    // Method to handle DELETE request for deleting customer card
+    public void deleteCustomerCard(HttpExchange exchange) throws IOException {
         try {
-            // Hapus kartu kredit/debit dari database
-            deleteCustomerCard(cardId);
+            // Extract customerId and cardId from the URI
+            String[] parts = exchange.getRequestURI().getPath().split("/");
+            int customerId = Integer.parseInt(parts[2]);
+            int cardId = Integer.parseInt(parts[4]);
 
-            // Mengirimkan respons dengan status 204 (No Content) untuk mengindikasikan berhasil dihapus
-            sendResponse(exchange, HttpURLConnection.HTTP_NO_CONTENT, "");
-        } catch (Exception e) {
+            // Validate and delete card
+            try (Connection conn = DatabaseConnection.getConnection()) {
+                // Check if card is not primary before deleting
+                if (!isCardPrimary(cardId, conn)) {
+                    deleteCardFromDatabase(cardId, conn);
+                    sendResponse(exchange, HttpURLConnection.HTTP_OK, "Card deleted successfully");
+                } else {
+                    sendResponse(exchange, HttpURLConnection.HTTP_BAD_REQUEST, "Cannot delete primary card");
+                }
+            } catch (SQLException e) {
+                e.printStackTrace();
+                sendResponse(exchange, HttpURLConnection.HTTP_INTERNAL_ERROR, "Failed to delete card");
+            }
+        } catch (NumberFormatException | ArrayIndexOutOfBoundsException e) {
             e.printStackTrace();
-            // Jika terjadi kesalahan, kirim respons HTTP 500 (Internal Server Error)
-            sendResponse(exchange, HttpURLConnection.HTTP_INTERNAL_ERROR, "{\"error\":\"Could not delete customer card\"}");
+            sendResponse(exchange, HttpURLConnection.HTTP_BAD_REQUEST, "Invalid request");
         }
     }
+
+    // Method to check if the card is primary
+    private boolean isCardPrimary(int cardId, Connection conn) throws SQLException {
+        String sql = "SELECT is_primary FROM cards WHERE id = ?";
+        try (PreparedStatement stmt = conn.prepareStatement(sql)) {
+            stmt.setInt(1, cardId);
+            try (ResultSet rs = stmt.executeQuery()) {
+                if (rs.next()) {
+                    return rs.getBoolean("is_primary");
+                }
+            }
+        }
+        return false; // Return false if card not found or is_primary not explicitly set
+    }
+
+    // Method to delete the card from database
+    private void deleteCardFromDatabase(int cardId, Connection conn) throws SQLException {
+        String sql = "DELETE FROM cards WHERE id = ?";
+        try (PreparedStatement stmt = conn.prepareStatement(sql)) {
+            stmt.setInt(1, cardId);
+            stmt.executeUpdate();
+        }
+    }
+
 
     // Metode untuk mengirimkan respons HTTP dengan status dan data tertentu
     private void sendResponse(HttpExchange exchange, int statusCode, String response) throws IOException {
@@ -471,20 +522,6 @@ public class CustomerHandler implements HttpHandler {
         }
     }
 
-    private void updateShippingAddress(int addressId, String address) throws SQLException {
-        String sql = "UPDATE shipping_addresses SET address = ? WHERE id = ?";
-        try (Connection conn = DatabaseConnection.getConnection();
-             PreparedStatement stmt = conn.prepareStatement(sql)) {
-            stmt.setString(1, address);
-            stmt.setInt(2, addressId);
-
-            int affectedRows = stmt.executeUpdate();
-            if (affectedRows == 0) {
-                throw new SQLException("Updating shipping address failed, no rows affected.");
-            }
-        }
-    }
-
     private void deleteCustomer(int customerId) throws SQLException {
         String sql = "DELETE FROM customers WHERE id = ?";
         try (Connection conn = DatabaseConnection.getConnection();
@@ -494,19 +531,6 @@ public class CustomerHandler implements HttpHandler {
             int affectedRows = stmt.executeUpdate();
             if (affectedRows == 0) {
                 throw new SQLException("Deleting customer failed, no rows affected.");
-            }
-        }
-    }
-
-    private void deleteCustomerCard(int cardId) throws SQLException {
-        String sql = "DELETE FROM cards WHERE id = ?";
-        try (Connection conn = DatabaseConnection.getConnection();
-             PreparedStatement stmt = conn.prepareStatement(sql)) {
-            stmt.setInt(1, cardId);
-
-            int affectedRows = stmt.executeUpdate();
-            if (affectedRows == 0) {
-                throw new SQLException("Deleting customer card failed, no rows affected.");
             }
         }
     }

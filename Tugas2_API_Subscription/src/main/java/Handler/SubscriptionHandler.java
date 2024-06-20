@@ -1,5 +1,6 @@
 package Handler;
 
+// Impor model dan kelas lain yang dibutuhkan
 import Model.Item;
 import Model.Customer;
 import Model.Subscription;
@@ -20,6 +21,7 @@ public class SubscriptionHandler implements HttpHandler {
 
     private final String apiKey;
 
+    // Konstruktor untuk menginisialisasi handler dengan API key yang digunakan untuk otorisasi
     public SubscriptionHandler(String apiKey) {
         this.apiKey = apiKey;
     }
@@ -30,13 +32,14 @@ public class SubscriptionHandler implements HttpHandler {
         String path = exchange.getRequestURI().getPath();
         String authHeader = exchange.getRequestHeaders().getFirst("Authorization");
 
-        // API key verification
+        // Verifikasi API key
         if (authHeader == null || !authHeader.equals(apiKey)) {
             sendResponse(exchange, 403, ErrorResponse.create("Forbidden"));
             return;
         }
 
         try {
+            // Menangani permintaan berdasarkan metode HTTP
             switch (method.toUpperCase()) {
                 case "GET":
                     handleGetRequest(exchange, path);
@@ -54,41 +57,50 @@ public class SubscriptionHandler implements HttpHandler {
         }
     }
 
+    // Menangani permintaan GET
     private void handleGetRequest(HttpExchange exchange, String path) throws IOException {
         if (path.matches("/subscriptions/?")) {
             if (exchange.getRequestURI().getQuery() != null &&
                     exchange.getRequestURI().getQuery().contains("sort_by=current_term_end&sort_type=desc")) {
+                // Mengambil semua langganan dan mengurutkannya berdasarkan current_term_end secara menurun
                 getAllSubscriptionsSortedByCurrentTermEndDesc(exchange);
             } else {
+                // Mengambil semua langganan
                 getAllSubscriptions(exchange);
             }
         } else if (path.matches("/subscriptions/\\d+/?")) {
+            // Mengambil langganan berdasarkan ID
             getSubscriptionById(exchange);
         } else {
             sendResponse(exchange, 404, ErrorResponse.create("Endpoint not found"));
         }
     }
 
+    // Menangani permintaan POST
     private void handlePostRequest(HttpExchange exchange, String path) throws IOException {
         if (path.matches("/subscriptions/?")) {
+            // Membuat langganan baru
             createSubscription(exchange);
         } else {
             sendResponse(exchange, 404, ErrorResponse.create("Endpoint not found"));
         }
     }
 
+    // Mengambil semua langganan dari database
     private void getAllSubscriptions(HttpExchange exchange) throws IOException {
         List<Subscription> subscriptions = new ArrayList<>();
         try (Connection conn = DatabaseConnection.getConnection();
              PreparedStatement stmt = conn.prepareStatement("SELECT * FROM subscriptions");
              ResultSet rs = stmt.executeQuery()) {
 
+            // Memproses setiap baris hasil query dan menambahkan ke daftar subscriptions
             while (rs.next()) {
                 Subscription subscription = mapResultSetToSubscription(rs);
                 subscription.setItems(getSubscriptionItems(conn, subscription.getId()));
                 subscriptions.add(subscription);
             }
 
+            // Mengirimkan daftar subscriptions sebagai respons dalam format JSON
             sendResponse(exchange, 200, serializeSubscriptionsToJson(subscriptions).toString());
         } catch (SQLException e) {
             e.printStackTrace();
@@ -96,18 +108,21 @@ public class SubscriptionHandler implements HttpHandler {
         }
     }
 
+    // Mengambil semua langganan dan mengurutkannya berdasarkan current_term_end secara menurun
     private void getAllSubscriptionsSortedByCurrentTermEndDesc(HttpExchange exchange) throws IOException {
         List<Subscription> subscriptions = new ArrayList<>();
         try (Connection conn = DatabaseConnection.getConnection();
              PreparedStatement stmt = conn.prepareStatement("SELECT * FROM subscriptions ORDER BY current_term_end DESC");
              ResultSet rs = stmt.executeQuery()) {
 
+            // Memproses setiap baris hasil query dan menambahkan ke daftar subscriptions
             while (rs.next()) {
                 Subscription subscription = mapResultSetToSubscription(rs);
                 subscription.setItems(getSubscriptionItems(conn, subscription.getId()));
                 subscriptions.add(subscription);
             }
 
+            // Mengirimkan daftar subscriptions sebagai respons dalam format JSON
             sendResponse(exchange, 200, serializeSubscriptionsToJson(subscriptions).toString());
         } catch (SQLException e) {
             e.printStackTrace();
@@ -115,6 +130,7 @@ public class SubscriptionHandler implements HttpHandler {
         }
     }
 
+    // Memetakan hasil ResultSet ke objek Subscription
     private Subscription mapResultSetToSubscription(ResultSet rs) throws SQLException {
         Subscription subscription = new Subscription();
         subscription.setId(rs.getInt("id"));
@@ -129,6 +145,7 @@ public class SubscriptionHandler implements HttpHandler {
         return subscription;
     }
 
+    // Mengambil item langganan berdasarkan subscription_id dari database
     private List<SubscriptionItem> getSubscriptionItems(Connection conn, int subscriptionId) throws SQLException {
         List<SubscriptionItem> items = new ArrayList<>();
         String sql = "SELECT si.*, i.name, i.price, i.type FROM subscription_items si " +
@@ -158,6 +175,7 @@ public class SubscriptionHandler implements HttpHandler {
         return items;
     }
 
+    // Menyusun daftar Subscription ke dalam format JSON
     private JSONObject serializeSubscriptionsToJson(List<Subscription> subscriptions) {
         JSONObject result = new JSONObject();
         JSONArray subscriptionsArray = new JSONArray();
@@ -194,6 +212,7 @@ public class SubscriptionHandler implements HttpHandler {
         return result;
     }
 
+    // Mengambil langganan berdasarkan ID dari database
     private void getSubscriptionById(HttpExchange exchange) throws IOException {
         String[] parts = exchange.getRequestURI().getPath().split("/");
         int subscriptionId;
@@ -215,12 +234,13 @@ public class SubscriptionHandler implements HttpHandler {
                         Subscription subscription = mapResultSetToSubscription(rs);
                         subscription.setItems(getSubscriptionItems(conn, subscriptionId));
 
-                        // Create Customer object and set its properties
+                        // Membuat objek Customer dan menetapkan propertinya
                         Customer customer = new Customer();
                         customer.setId(rs.getInt("customer_id"));
                         customer.setFirstName(rs.getString("first_name"));
                         customer.setLastName(rs.getString("last_name"));
 
+                        // Menyusun data Subscription dan Customer ke dalam format JSON
                         JSONObject subscriptionJson = serializeSubscriptionToJson(subscription, customer);
                         sendResponse(exchange, 200, subscriptionJson.toString());
                     } else {
@@ -234,6 +254,7 @@ public class SubscriptionHandler implements HttpHandler {
         }
     }
 
+    // Menyusun Subscription dan Customer ke dalam format JSON
     private JSONObject serializeSubscriptionToJson(Subscription subscription, Customer customer) {
         JSONObject subscriptionJson = new JSONObject();
         subscriptionJson.put("id", subscription.getId());
@@ -264,6 +285,7 @@ public class SubscriptionHandler implements HttpHandler {
         return subscriptionJson;
     }
 
+    // Membuat langganan baru berdasarkan data dari request body
     private void createSubscription(HttpExchange exchange) throws IOException {
         StringBuilder requestBody = new StringBuilder();
         try (BufferedReader reader = new BufferedReader(new InputStreamReader(exchange.getRequestBody()))) {
@@ -281,7 +303,7 @@ public class SubscriptionHandler implements HttpHandler {
             return;
         }
 
-        // Extract data from JSON
+        // Mengambil data dari JSON
         int customerId = json.getInt("customer_id");
         String billingPeriod = json.getString("billing_period");
         String billingPeriodUnit = json.getString("billing_period_unit");
@@ -292,13 +314,13 @@ public class SubscriptionHandler implements HttpHandler {
         String status = json.getString("status");
         JSONArray itemsArray = json.getJSONArray("items");
 
-        // Convert timestamp strings to Timestamp objects
+        // Mengonversi string timestamp ke objek Timestamp
         Timestamp activatedAt = Timestamp.valueOf(activatedAtStr.replace("T", " ").replace("Z", ""));
         Timestamp currentTermStart = Timestamp.valueOf(currentTermStartStr.replace("T", " ").replace("Z", ""));
         Timestamp currentTermEnd = Timestamp.valueOf(currentTermEndStr.replace("T", " ").replace("Z", ""));
 
         try (Connection conn = DatabaseConnection.getConnection()) {
-            // Check if the customer_id exists in the customers table
+            // Memeriksa apakah customer_id ada di tabel customers
             String customerCheckSql = "SELECT COUNT(*) FROM customers WHERE id = ?";
             try (PreparedStatement customerCheckStmt = conn.prepareStatement(customerCheckSql)) {
                 customerCheckStmt.setInt(1, customerId);
@@ -310,7 +332,7 @@ public class SubscriptionHandler implements HttpHandler {
                 }
             }
 
-            // Insert into subscriptions table
+            // Menyisipkan data ke tabel subscriptions
             String sql = "INSERT INTO subscriptions (customer_id, billing_period, billing_period_unit, total_due, activated_at, current_term_start, current_term_end, status) " +
                     "VALUES (?, ?, ?, ?, ?, ?, ?, ?)";
             try (PreparedStatement stmt = conn.prepareStatement(sql, Statement.RETURN_GENERATED_KEYS)) {
@@ -324,16 +346,16 @@ public class SubscriptionHandler implements HttpHandler {
                 stmt.setString(8, status);
                 stmt.executeUpdate();
 
-                // Retrieve auto-generated subscription ID
+                // Mendapatkan ID langganan yang baru dibuat
                 int subscriptionId;
                 try (ResultSet generatedKeys = stmt.getGeneratedKeys()) {
                     if (generatedKeys.next()) {
                         subscriptionId = generatedKeys.getInt(1);
 
-                        // Insert into subscription_items table
+                        // Menyisipkan data ke tabel subscription_items
                         insertSubscriptionItems(conn, subscriptionId, itemsArray);
 
-                        // Construct response JSON
+                        // Membuat respons JSON
                         JSONObject responseJson = new JSONObject();
                         responseJson.put("message", "Subscription created with id " + subscriptionId);
                         sendResponse(exchange, 201, responseJson.toString());
@@ -348,6 +370,7 @@ public class SubscriptionHandler implements HttpHandler {
         }
     }
 
+    // Menyisipkan item langganan ke tabel subscription_items
     private void insertSubscriptionItems(Connection conn, int subscriptionId, JSONArray itemsArray) throws SQLException {
         String sql = "INSERT INTO subscription_items (subscription_id, item_id, quantity, amount, price) " +
                 "VALUES (?, ?, ?, ?, ?)";
@@ -366,6 +389,7 @@ public class SubscriptionHandler implements HttpHandler {
         }
     }
 
+    // Metode untuk mengirimkan respons ke klien
     private void sendResponse(HttpExchange exchange, int statusCode, String response) throws IOException {
         exchange.getResponseHeaders().set("Content-Type", "application/json");
         exchange.sendResponseHeaders(statusCode, response.getBytes().length);
