@@ -1,4 +1,3 @@
-
 # TugasPBO2_API_Subscriptions
 
 #### Nama Kelompok:
@@ -45,6 +44,17 @@ __NOTE: sesuai port yang diset, port yang kami set itu salah satu NIM dari kelom
 #### 3. Setelah membuka tinggal buat collection dan request. Setelah itu pilih metode yang di inginkan dan isi port yang tadi telah di copy. Contoh ada gambar dibawah.
 
 ![image](https://github.com/Lucienthewizz/Webdesign/assets/65484618/428a733a-4203-4cef-a258-53d1c43d8d4b)
+
+#### 4. Selanjutnya Setelah mencopy, copy Autentikasi akses API menggunakan API key yg di hardcoded pada kelas Main dan click header, tambahkan key dan valueisikan Key yang telah diset yaitu "Authorization" dan valuenya "api_subscription".
+
+- Key       : Authorization
+- Value     : api_subscription
+
+![image](https://github.com/Lucienthewizz/Webdesign/assets/65484618/cf4310d9-4c43-46ec-9261-e65c51e8da28)
+
+#### Setelah itu bisa langsung mengakses API api subscription!
+
+
 
 ## Spesifikasi API
 
