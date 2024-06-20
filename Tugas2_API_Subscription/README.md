@@ -15,7 +15,7 @@ API (Application Programming Interface) adalah sekumpulan definisi dan protokol 
 
 Secara sederhana, API memungkinkan pengembang untuk menggunakan kode atau layanan yang sudah ada untuk membangun aplikasi baru, sehingga mempercepat proses pengembangan dan meningkatkan efisiensi.
 
-Program API dari java ini bertujuan untuk membangun API sederhana yang menangani operasi dasar (CRUD) untuk sistem manajemen Customers, item, dan langganan (subscriptions). API ini menggunakan database SQLite untuk menyimpan data dan memungkinkan pengguna untuk berinteraksi dengan sistem melalui permintaan HTTP. API dirancang untuk digunakan dalam skenario aplikasi yang memerlukan pengelolaan Customers dan langganan, seperti layanan berlangganan produk atau konten. 
+Program API dari java ini bertujuan untuk membangun API sederhana yang menangani operasi dasar (CRUD) untuk sistem manajemen Customers, item, dan langganan (subscriptions). API ini menggunakan database SQLite untuk menyimpan data dan memungkinkan pengguna untuk berinteraksi dengan sistem melalui permintaan HTTP. API dirancang untuk digunakan dalam skenario aplikasi yang memerlukan pengelolaan Customers dan langganan, seperti layanan berlangganan produk atau konten. API ini menggunakan Database SQLite dan menggunakan DBbrowser for SQLite untuk membuat struktur tabel tersebut.
 
 Dengan method Request method pada API:
 - GET: untuk mendapatkan list atau detail data dari entitas
