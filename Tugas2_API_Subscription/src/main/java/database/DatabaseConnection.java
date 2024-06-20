@@ -6,32 +6,29 @@ import java.sql.SQLException;
 
 public class DatabaseConnection {
 
-    private static final String url = "jdbc:sqlite:src/main/resources/db/subscription.db";
-    private static Connection conn;
+    // URL JDBC untuk menghubungkan ke database SQLite
+    // Path adalah "jdbc:sqlite:Tugas2_API_Subscription/src/main/resources/db_subscription.db".
+    // Database berada di dalam folder resources yang sudah saya buat
+    private static final String JDBC_URL = "jdbc:sqlite:Tugas2_API_Subscription/src/main/resources/db_subscription.db";
 
-    public static void connect() {
-        try {
-            conn = DriverManager.getConnection(url);
-            System.out.println("Connected to SQLite database.");
-        } catch (SQLException e) {
-            System.out.println(e.getMessage());
-        }
+    // Metode untuk mendapatkan koneksi ke database SQLite
+    public static Connection getConnection() throws SQLException {
+        // Menggunakan DriverManager untuk mendapatkan koneksi berdasarkan URL JDBC yang diberikan
+        return DriverManager.getConnection(JDBC_URL);
     }
 
-    public static Connection getConnection() {
-        if (conn == null) {
-            connect();
-        }
-        return conn;
-    }
-
-    public static void closeConnection(Connection conn) {
-        if (conn != null) {
-            try {
-                conn.close();
-            } catch (SQLException e) {
-                System.out.println(e.getMessage());
+    // Metode untuk inisialisasi database
+    public static void init() {
+        // Menggunakan try-with-resources untuk memastikan koneksi ditutup secara otomatis setelah digunakan
+        try (Connection conn = getConnection()) {
+            if (conn != null) {
+                // Jika koneksi berhasil, cetak pesan ke console
+                System.out.println("Connected to SQLite database");
             }
+        } catch (SQLException e) {
+            // Jika terjadi SQLException, cetak stack trace dan lempar runtime exception
+            e.printStackTrace();
+            throw new RuntimeException("Failed to load SQLite JDBC driver");
         }
     }
 }
