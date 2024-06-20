@@ -50,6 +50,7 @@ __NOTE: sesuai port yang diset, port yang kami set itu salah satu NIM dari kelom
 - Key       : Authorization
 - Value     : api_subscription
 
+![image](https://github.com/Lucienthewizz/Webdesign/assets/65484618/d6af2c47-7302-4978-9fbf-b3f7f8060318)
 ![image](https://github.com/Lucienthewizz/Webdesign/assets/65484618/cf4310d9-4c43-46ec-9261-e65c51e8da28)
 
 #### Setelah itu bisa langsung mengakses API api subscription!
